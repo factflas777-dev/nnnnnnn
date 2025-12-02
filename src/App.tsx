@@ -17,7 +17,7 @@ function App() {
   const [gamePhase, setGamePhase] = useState<GamePhase>('menu');
   const [leaderboard, setLeaderboard] = useState<{ username: string; score: number }[]>([]);
   const [deathStats, setDeathStats] = useState<PlayerStats | null>(null);
-  const [playerConfig, setPlayerConfig] = useState({ username: '', color: '', skin: '' });
+  const [playerConfig, setPlayerConfig] = useState({ username: '', color: '', skin: '', faceUrl: '' });
 
   const lastScoreRef = useRef(0);
   const lastKillsRef = useRef(0);
@@ -67,10 +67,10 @@ function App() {
     return () => clearInterval(interval);
   }, [gamePhase]);
 
-  function handleStart(username: string, color: string, skin: string) {
-    setPlayerConfig({ username, color, skin });
+  function handleStart(username: string, color: string, skin: string, faceUrl?: string) {
+    setPlayerConfig({ username, color, skin, faceUrl: faceUrl || '' });
     if (gameEngineRef.current) {
-      gameEngineRef.current.initialize(username, color, skin);
+      gameEngineRef.current.initialize(username, color, skin, faceUrl);
       gameEngineRef.current.start();
       audioService.resume();
       setGamePhase('playing');
@@ -111,7 +111,7 @@ function App() {
 
   function handleRespawn() {
     if (gameEngineRef.current) {
-      gameEngineRef.current.respawn(playerConfig.username, playerConfig.color, playerConfig.skin);
+      gameEngineRef.current.respawn(playerConfig.username, playerConfig.color, playerConfig.skin, playerConfig.faceUrl);
       setGamePhase('playing');
       setDeathStats(null);
       lastScoreRef.current = 0;

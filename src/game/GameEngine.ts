@@ -19,6 +19,7 @@ export class GameEngine {
   private mousePos: Vector2 = { x: 0, y: 0 };
   private touchPos: Vector2 | null = null;
   private isBoosting: boolean = false;
+  private faceTextures: Map<string, HTMLImageElement> = new Map();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -41,7 +42,7 @@ export class GameEngine {
     this.canvas.height = window.innerHeight;
   }
 
-  public initialize(playerName: string, color: string, skin: string) {
+  public initialize(playerName: string, color: string, skin: string, faceUrl?: string) {
     this.gameState.foods = [];
     for (let i = 0; i < this.INITIAL_FOOD_COUNT; i++) {
       this.gameState.foods.push(generateFood(this.MAP_WIDTH, this.MAP_HEIGHT));
@@ -50,8 +51,12 @@ export class GameEngine {
     const startX = this.MAP_WIDTH / 2 + (Math.random() - 0.5) * 1000;
     const startY = this.MAP_HEIGHT / 2 + (Math.random() - 0.5) * 1000;
 
-    this.gameState.playerSnake = this.createSnake('player', playerName, startX, startY, color, skin);
+    this.gameState.playerSnake = this.createSnake('player', playerName, startX, startY, color, skin, faceUrl);
     this.gameState.snakes.set('player', this.gameState.playerSnake);
+
+    if (faceUrl) {
+      this.loadFaceTexture('player', faceUrl);
+    }
 
     for (let i = 0; i < this.MAX_AI_SNAKES; i++) {
       const aiSnake = generateAISnake(this.MAP_WIDTH, this.MAP_HEIGHT, i);
@@ -61,7 +66,7 @@ export class GameEngine {
     this.startTime = Date.now();
   }
 
-  private createSnake(id: string, username: string, x: number, y: number, color: string, skin: string): Snake {
+  private createSnake(id: string, username: string, x: number, y: number, color: string, skin: string, faceUrl?: string): Snake {
     const segments: { x: number; y: number; radius: number }[] = [];
     const initialSegments = 10;
     const segmentRadius = 8;
@@ -84,8 +89,21 @@ export class GameEngine {
       isDead: false,
       score: 0,
       kills: 0,
-      isAI: id !== 'player'
+      isAI: id !== 'player',
+      faceUrl: faceUrl
     };
+  }
+
+  private loadFaceTexture(snakeId: string, faceUrl: string) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      this.faceTextures.set(snakeId, img);
+    };
+    img.onerror = () => {
+      console.error(`Failed to load face texture for ${snakeId}`);
+    };
+    img.src = faceUrl;
   }
 
   public start() {
@@ -260,27 +278,52 @@ export class GameEngine {
       }
 
       const head = snake.segments[0];
-      this.ctx.save();
-      this.ctx.translate(head.x, head.y);
-      this.ctx.rotate(snake.direction);
+      const faceTexture = this.faceTextures.get(snake.id);
 
-      this.ctx.fillStyle = 'white';
-      this.ctx.beginPath();
-      this.ctx.arc(head.radius * 0.3, -head.radius * 0.3, head.radius * 0.25, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.beginPath();
-      this.ctx.arc(head.radius * 0.3, head.radius * 0.3, head.radius * 0.25, 0, Math.PI * 2);
-      this.ctx.fill();
+      if (faceTexture && snake.faceUrl) {
+        this.ctx.save();
+        this.ctx.translate(head.x, head.y);
+        this.ctx.rotate(snake.direction);
 
-      this.ctx.fillStyle = 'black';
-      this.ctx.beginPath();
-      this.ctx.arc(head.radius * 0.35, -head.radius * 0.3, head.radius * 0.15, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.beginPath();
-      this.ctx.arc(head.radius * 0.35, head.radius * 0.3, head.radius * 0.15, 0, Math.PI * 2);
-      this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, head.radius, 0, Math.PI * 2);
+        this.ctx.clip();
 
-      this.ctx.restore();
+        const size = head.radius * 2;
+        this.ctx.drawImage(faceTexture, -head.radius, -head.radius, size, size);
+
+        this.ctx.restore();
+
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.arc(head.x, head.y, head.radius, 0, Math.PI * 2);
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        this.ctx.restore();
+      } else {
+        this.ctx.save();
+        this.ctx.translate(head.x, head.y);
+        this.ctx.rotate(snake.direction);
+
+        this.ctx.fillStyle = 'white';
+        this.ctx.beginPath();
+        this.ctx.arc(head.radius * 0.3, -head.radius * 0.3, head.radius * 0.25, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(head.radius * 0.3, head.radius * 0.3, head.radius * 0.25, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.fillStyle = 'black';
+        this.ctx.beginPath();
+        this.ctx.arc(head.radius * 0.35, -head.radius * 0.3, head.radius * 0.15, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.arc(head.radius * 0.35, head.radius * 0.3, head.radius * 0.15, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.restore();
+      }
 
       this.ctx.save();
       this.ctx.font = 'bold 14px Arial';
@@ -326,12 +369,17 @@ export class GameEngine {
     return Math.floor((Date.now() - this.startTime) / 1000);
   }
 
-  public respawn(playerName: string, color: string, skin: string) {
+  public respawn(playerName: string, color: string, skin: string, faceUrl?: string) {
     const startX = this.MAP_WIDTH / 2 + (Math.random() - 0.5) * 1000;
     const startY = this.MAP_HEIGHT / 2 + (Math.random() - 0.5) * 1000;
 
-    this.gameState.playerSnake = this.createSnake('player', playerName, startX, startY, color, skin);
+    this.gameState.playerSnake = this.createSnake('player', playerName, startX, startY, color, skin, faceUrl);
     this.gameState.snakes.set('player', this.gameState.playerSnake);
+
+    if (faceUrl) {
+      this.loadFaceTexture('player', faceUrl);
+    }
+
     this.startTime = Date.now();
   }
 }

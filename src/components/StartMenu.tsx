@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Zap } from 'lucide-react';
+import { Zap, Upload as UploadIcon, X } from 'lucide-react';
+import FaceUpload from './FaceUpload';
+import { getOrCreateProfile, removeFaceImage, Profile } from '../services/ProfileService';
 
 interface StartMenuProps {
-  onStart: (username: string, color: string, skin: string) => void;
+  onStart: (username: string, color: string, skin: string, faceUrl?: string) => void;
 }
 
 interface Skin {
@@ -21,6 +23,8 @@ export default function StartMenu({ onStart }: StartMenuProps) {
   const [selectedColor, setSelectedColor] = useState('#00ff00');
   const [selectedSkin, setSelectedSkin] = useState('default');
   const [skins, setSkins] = useState<Skin[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [showFaceUpload, setShowFaceUpload] = useState(false);
 
   const colors = [
     '#00ff00', '#ff0000', '#0000ff', '#ffff00', '#ff00ff', '#00ffff',
@@ -32,6 +36,7 @@ export default function StartMenu({ onStart }: StartMenuProps) {
     const savedUsername = localStorage.getItem('slither_username');
     if (savedUsername) {
       setUsername(savedUsername);
+      loadProfile(savedUsername);
     }
   }, []);
 
@@ -46,10 +51,25 @@ export default function StartMenu({ onStart }: StartMenuProps) {
     }
   }
 
+  async function loadProfile(username: string) {
+    const profileData = await getOrCreateProfile(username);
+    if (profileData) {
+      setProfile(profileData);
+    }
+  }
+
   function handleStart() {
     if (username.trim()) {
       localStorage.setItem('slither_username', username.trim());
-      onStart(username.trim(), selectedColor, selectedSkin);
+      onStart(username.trim(), selectedColor, selectedSkin, profile?.face_url || undefined);
+    }
+  }
+
+  async function handleRemoveFace() {
+    if (!profile) return;
+    const success = await removeFaceImage(profile.user_id);
+    if (success) {
+      setProfile({ ...profile, face_url: null, face_state: 'none' });
     }
   }
 
@@ -129,6 +149,49 @@ export default function StartMenu({ onStart }: StartMenuProps) {
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Custom Face (Head Only)
+            </label>
+            <div className="bg-gray-800 rounded-lg p-4 space-y-3">
+              {profile?.face_url ? (
+                <div className="flex items-center gap-4">
+                  <img
+                    src={profile.face_url}
+                    alt="Face preview"
+                    className="w-16 h-16 rounded-full border-2 border-green-500"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-300">Custom face uploaded</p>
+                    <p className="text-xs text-gray-500">
+                      {profile.face_state === 'approved' && 'Active'}
+                      {profile.face_state === 'pending' && 'Processing...'}
+                      {profile.face_state === 'flagged' && 'Under review'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleRemoveFace}
+                    className="text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowFaceUpload(true)}
+                  disabled={!username.trim()}
+                  className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:cursor-not-allowed"
+                >
+                  <UploadIcon className="w-5 h-5" />
+                  Upload Face
+                </button>
+              )}
+              <p className="text-xs text-gray-500 text-center">
+                Only your snake's head will show this image
+              </p>
+            </div>
+          </div>
+
           <button
             onClick={handleStart}
             disabled={!username.trim()}
@@ -137,6 +200,17 @@ export default function StartMenu({ onStart }: StartMenuProps) {
             Start Game
           </button>
         </div>
+
+        {showFaceUpload && profile && (
+          <FaceUpload
+            userId={profile.user_id}
+            onSuccess={(faceUrl) => {
+              setProfile({ ...profile, face_url: faceUrl, face_state: 'approved' });
+              setShowFaceUpload(false);
+            }}
+            onClose={() => setShowFaceUpload(false)}
+          />
+        )}
 
         <div className="mt-6 text-center text-xs text-gray-500">
           <p>Desktop: Move with mouse, boost with Space/Click</p>

@@ -24,6 +24,7 @@ export interface Snake {
   score: number;
   kills: number;
   isAI?: boolean;
+  faceUrl?: string;
 }
 
 export interface Food {
